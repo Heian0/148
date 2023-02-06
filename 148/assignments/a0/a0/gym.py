@@ -102,17 +102,34 @@ class Instructor:
     """
 
     name: str
-    _id : int
+    _id: int
     _qualifications: list[str]
 
-    def __init__(self, name: str, id: int, qualifications: list[str] = None) -> None:
+    def __init__(self, _id: int, name: str, qualifications: list[str] = []) -> None:
         """
         Initialize an Instructor with <name>, <id>, and qualifications if the
         instructor has any qualifications.
         """
+        self._id = _id
         self.name = name
-        self._id = id
         self._qualifications = qualifications
+
+    def add_certificate(self, q: str) -> bool:
+        self._qualifications.append(q)
+        return True
+
+    def get_id(self) -> int:
+        """
+        Returns the Instructor's id.
+        """
+        temp = self._id
+        return temp
+
+    def get_qualifications(self) -> list[str]:
+        """
+        Returns a copy of the Instructor's _qualifications.
+        """
+        return self._qualifications[:]
 
 
 class Gym:
@@ -184,7 +201,11 @@ class Gym:
         >>> ac.name
         'Athletic Centre'
         """
-        # TODO: implement this method!
+        self.name = gym_name
+        self._instructors = {}
+        self._workouts = {}
+        self._room_capacities = {}
+        self._schedule = {}
 
     def add_instructor(self, instructor: Instructor) -> bool:
         """Add a new <instructor> to this Gym's roster iff the <instructor> does
@@ -197,7 +218,12 @@ class Gym:
         >>> ac.add_instructor(diane)
         True
         """
-        # TODO: implement this method!
+        for id in self._instructors:
+            if instructor.get_id() == id:
+                return False
+
+        self._instructors[instructor.get_id()] = instructor
+        return True
 
     def add_workout_class(self, workout_class: WorkoutClass) -> bool:
         """Add a <workout_class> to this Gym iff the <workout_class> does not
@@ -210,7 +236,12 @@ class Gym:
         >>> ac.add_workout_class(kickboxing)
         True
         """
-        # TODO: implement this method!
+        for workout_name in self._workouts:
+            if workout_class.name == workout_name:
+                return False
+
+        self._workouts[workout_class.name] = workout_class
+        return True
 
     def add_room(self, name: str, capacity: int) -> bool:
         """Add a room with <name> and <capacity> to this Gym iff there is not
@@ -222,7 +253,12 @@ class Gym:
         >>> ac.add_room('Dance Studio', 50)
         True
         """
-        # TODO: implement this method!
+        for room_name in self._room_capacities:
+            if name == room_name:
+                return False
+
+        self._room_capacities[name] = capacity
+        return True
 
     def schedule_workout_class(self, time_point: datetime, room_name: str,
                                workout_name: str, instr_id: int) -> bool:
@@ -270,7 +306,26 @@ class Gym:
         tap.name, diane.get_id())
         True
         """
-        # TODO: implement this method!
+
+        if time_point in self._schedule:
+            for _class in self._schedule[time_point]:
+                if self._schedule[time_point][_class][0].get_id() == instr_id:
+                    return False
+
+        for qualification in self._workouts[workout_name].get_required_certificates():
+            if qualification not in self._instructors[instr_id].get_qualifications():
+                return False
+
+        if time_point in self._schedule:
+            for room in self._schedule[time_point]:
+                if room_name == room:
+                    return False
+
+        if self._schedule.get(time_point) is None:
+            self._schedule[time_point] = {room_name: (self._instructors[instr_id], self._workouts[workout_name], [])}
+            return True
+        self._schedule[time_point][room_name] = (self._instructors[instr_id], self._workouts[workout_name], [])
+        return True
 
     def register(self, time_point: datetime, client: str, workout_name: str) \
             -> bool:
@@ -309,7 +364,29 @@ class Gym:
         >>> ac.register(sep_9_2022_12_00, 'Philip', 'Boot Camp')
         False
         """
-        # TODO: implement this method!
+        if time_point not in self._schedule:
+            return False
+
+        for _class in self._schedule[time_point]:
+            if client in self._schedule[time_point][_class][2]:
+                return False
+
+        listy = []
+
+        for room_name in self._schedule[time_point]:
+            if self._schedule[time_point][room_name][1].name == workout_name:
+                listy.append((self._room_capacities[room_name] - len(self._schedule[time_point][room_name][2])
+                ,room_name))
+
+        listy.sort()
+        listy.reverse()
+
+        for item in listy:
+            if item[0] != 0:
+                self._schedule[time_point][item[1]][2].append(client)
+                return True
+
+        return False
 
     def instructor_hours(self, time1: datetime, time2: datetime) -> \
             dict[int, int]:
@@ -349,7 +426,17 @@ class Gym:
         >>> ac.instructor_hours(t1, t2) == {1: 2, 2: 0}
         True
         """
-        # TODO: implement this method!
+        hours_dict = {}
+        for id in self._instructors:
+            hours_dict[self._instructors[id].get_id()] = 0
+
+        if self._schedule:
+            for time in self._schedule:
+                if time1 <= time <= time2:
+                    for room_name in self._schedule[time]:
+                        hours_dict[self._schedule[time][room_name][0].get_id()] += 1
+
+        return hours_dict
 
     def payroll(self, time1: datetime, time2: datetime, base_rate: float) \
             -> list[tuple[int, str, int, float]]:
@@ -396,7 +483,32 @@ class Gym:
         >>> ac.payroll(t1, t2, 25.0)
         [(1, 'Diane', 1, 26.5), (2, 'David', 0, 0.0)]
         """
-        # TODO: implement this method!
+        payroll_list = []
+
+        if self._schedule:
+            for time in self._schedule:
+                if time1 <= time <= time2:
+                    for room_name in self._schedule[time]:
+                        ins_id = self._schedule[time][room_name][0].get_id()
+                        hrs = self.instructor_hours(time1, time2)[ins_id]
+                        payroll_list.append((ins_id,
+                                            self._schedule[time][room_name][0].name,
+                                            hrs,
+                                            (base_rate+len(self._instructors[ins_id].get_qualifications())*BONUS_RATE)
+                                             * hrs
+                                             ))
+
+        for id in self._instructors:
+            temp = True
+            for item in payroll_list:
+                if item[0] == id:
+                    temp = False
+            if temp:
+                payroll_list.append((id, self._instructors[id].name, 0, 0.0))
+
+        payroll_list.sort()
+
+        return payroll_list
 
     def _is_instructor_name_unique(self, instructor: Instructor) -> bool:
         """Return True iff the name of <instructor> is used by <= 1 instructor
@@ -419,7 +531,15 @@ class Gym:
         >>> ac._is_instructor_name_unique(third_hire)
         True
         """
-        # TODO: implement this method!
+        count = 0
+        for id in self._instructors:
+            if self._instructors[id].name == instructor.name:
+                count += 1
+
+        if count <= 1:
+            return True
+
+        return False
 
     def offerings_at(self, time_point: datetime) -> list[dict[str, str | int]]:
         """Return a list of dictionaries, each representing a workout offered
@@ -490,7 +610,32 @@ class Gym:
         ... ]
         True
         """
-        # TODO: implement this method!
+        listy = []
+
+        if not self._schedule[time_point]:
+            return []
+
+        for room_name in self._schedule[time_point]:
+            if self._is_instructor_name_unique(self._schedule[time_point][room_name][0]):
+                ins_name = self._schedule[time_point][room_name][0].name
+            else:
+                ins_name = self._schedule[time_point][room_name][0].name + \
+                           f" ({self._schedule[time_point][room_name][0].get_id()})"
+
+            listy.append(
+                create_offering_dict(
+                    time_point.strftime('%A, %Y-%m-%d'),
+                    time_point.strftime('%H:%M'),
+                    self._schedule[time_point][room_name][1].name,
+                    room_name,
+                    len(self._schedule[time_point][room_name][2]),
+                    self._room_capacities[room_name] - len(self._schedule[time_point][room_name][2]),
+                    ins_name
+                )
+            )
+
+        listy.sort(key=lambda x: x['Room'])
+        return listy
 
     def to_schedule_list(self, week: datetime = None) \
             -> list[dict[str, str | int]]:
@@ -548,12 +693,26 @@ class Gym:
         ... ]
         True
         """
-        # TODO: implement this method!
+        listy = []
 
-    def __eq__(self, other: Any) -> bool:
+        if self._schedule:
+            if week is not None:
+
+                for time in self._schedule:
+                    if in_week(time):
+                        listy.append(self.offerings_at(time))
+
+            else:
+                for time in self._schedule:
+                    listy.append(self.offerings_at(time))
+
+        listy.sort(key=lambda x: (datetime.strptime(x['Date'][-10], '%Y-%m-%d'), datetime.strptime(x['Time'], '%H:%M')))
+        return listy
+
+    def __eq__(self, other: Gym) -> bool:
         """Return True iff this Gym is equal to <other>.
 
-        Two gyms are considered equal if they have  name the same name,
+        Two gyms are considered equal if they have the same name,
         instructors, workouts, room capacities, and schedule.
 
         >>> ac = Gym('Athletic Centre')
@@ -561,7 +720,11 @@ class Gym:
         >>> ac == ac2
         True
         """
-        # TODO: implement this method!
+        return self.name == other.name\
+            and self._instructors == other._instructors\
+            and self._workouts == other._workouts\
+            and self._room_capacities == other._room_capacities\
+            and self._schedule == other._schedule
 
     def to_webpage(self, filename: str = 'schedule.html') -> None:
         """Create a simple html webpage from data exported by
@@ -676,6 +839,7 @@ def html_and_payroll_demo() -> None:
 
 
 if __name__ == '__main__':
+
     import python_ta
     python_ta.check_all(config={
         'allowed-io': ['gym_from_yaml', 'html_and_payroll_demo'],
@@ -688,7 +852,7 @@ if __name__ == '__main__':
         # Python console instead:
         'output-format': 'python_ta.reporters.ColorReporter'
     })
-    # import doctest
-    # doctest.testmod()
-    #
+    import doctest
+    doctest.testmod()
+
     # html_and_payroll_demo()

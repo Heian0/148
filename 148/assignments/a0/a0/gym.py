@@ -96,7 +96,7 @@ class Instructor:
     === Public Attributes ===
     name: The name of this instructor.
 
-    == Private Attributes ++
+    === Private Attributes ===
     _id: The id representing this instructor.
     _qualifications: A list of qualifications this instructor holds.
     """
@@ -105,18 +105,24 @@ class Instructor:
     _id: int
     _qualifications: list[str]
 
-    def __init__(self, _id: int, name: str, qualifications: list[str] = []) -> None:
+    def __init__(self, _id: int, name: str) -> None:
         """
-        Initialize an Instructor with <name>, <id>, and qualifications if the
-        instructor has any qualifications.
+        Initialize an Instructor with <name>, <id>,
+        and qualifications if the instructor
+        has any qualifications.
         """
         self._id = _id
         self.name = name
-        self._qualifications = qualifications
+        self._qualifications = []
 
     def add_certificate(self, q: str) -> bool:
-        self._qualifications.append(q)
-        return True
+        """
+        Appends certificate <q> to self._qualifications.
+        """
+        if q not in self._qualifications:
+            self._qualifications.append(q)
+            return True
+        return False
 
     def get_id(self) -> int:
         """
@@ -125,7 +131,7 @@ class Instructor:
         temp = self._id
         return temp
 
-    def get_qualifications(self) -> list[str]:
+    def get_certificates(self) -> list[str]:
         """
         Returns a copy of the Instructor's _qualifications.
         """
@@ -218,8 +224,8 @@ class Gym:
         >>> ac.add_instructor(diane)
         True
         """
-        for id in self._instructors:
-            if instructor.get_id() == id:
+        for _id in self._instructors:
+            if instructor.get_id() == _id:
                 return False
 
         self._instructors[instructor.get_id()] = instructor
@@ -312,8 +318,8 @@ class Gym:
                 if self._schedule[time_point][_class][0].get_id() == instr_id:
                     return False
 
-        for qualification in self._workouts[workout_name].get_required_certificates():
-            if qualification not in self._instructors[instr_id].get_qualifications():
+        for q in self._workouts[workout_name].get_required_certificates():
+            if q not in self._instructors[instr_id].get_certificates():
                 return False
 
         if time_point in self._schedule:
@@ -322,9 +328,13 @@ class Gym:
                     return False
 
         if self._schedule.get(time_point) is None:
-            self._schedule[time_point] = {room_name: (self._instructors[instr_id], self._workouts[workout_name], [])}
+            self._schedule[time_point] \
+                = {room_name: (self._instructors[instr_id],
+                               self._workouts[workout_name],
+                               [])}
             return True
-        self._schedule[time_point][room_name] = (self._instructors[instr_id], self._workouts[workout_name], [])
+        self._schedule[time_point][room_name] \
+            = (self._instructors[instr_id], self._workouts[workout_name], [])
         return True
 
     def register(self, time_point: datetime, client: str, workout_name: str) \
@@ -375,8 +385,9 @@ class Gym:
 
         for room_name in self._schedule[time_point]:
             if self._schedule[time_point][room_name][1].name == workout_name:
-                listy.append((self._room_capacities[room_name] - len(self._schedule[time_point][room_name][2])
-                ,room_name))
+                listy.append((self._room_capacities[room_name]
+                              - len(self._schedule[time_point][room_name][2]),
+                              room_name))
 
         listy.sort()
         listy.reverse()
@@ -427,14 +438,15 @@ class Gym:
         True
         """
         hours_dict = {}
-        for id in self._instructors:
-            hours_dict[self._instructors[id].get_id()] = 0
+        for _id in self._instructors:
+            hours_dict[self._instructors[_id].get_id()] = 0
 
         if self._schedule:
             for time in self._schedule:
                 if time1 <= time <= time2:
                     for room_name in self._schedule[time]:
-                        hours_dict[self._schedule[time][room_name][0].get_id()] += 1
+                        ins_id = self._schedule[time][room_name][0].get_id()
+                        hours_dict[ins_id] += 1
 
         return hours_dict
 
@@ -491,20 +503,24 @@ class Gym:
                     for room_name in self._schedule[time]:
                         ins_id = self._schedule[time][room_name][0].get_id()
                         hrs = self.instructor_hours(time1, time2)[ins_id]
+                        ins_name = self._schedule[time][room_name][0].name
+                        ins = self._instructors[ins_id]
                         payroll_list.append((ins_id,
-                                            self._schedule[time][room_name][0].name,
-                                            hrs,
-                                            (base_rate+len(self._instructors[ins_id].get_qualifications())*BONUS_RATE)
+                                             ins_name,
+                                             hrs,
+                                             (base_rate + len(
+                                                 ins.get_certificates())
+                                              * BONUS_RATE)
                                              * hrs
                                              ))
 
-        for id in self._instructors:
+        for _id in self._instructors:
             temp = True
             for item in payroll_list:
-                if item[0] == id:
+                if item[0] == _id:
                     temp = False
             if temp:
-                payroll_list.append((id, self._instructors[id].name, 0, 0.0))
+                payroll_list.append((_id, self._instructors[_id].name, 0, 0.0))
 
         payroll_list.sort()
 
@@ -532,8 +548,8 @@ class Gym:
         True
         """
         count = 0
-        for id in self._instructors:
-            if self._instructors[id].name == instructor.name:
+        for _id in self._instructors:
+            if self._instructors[_id].name == instructor.name:
                 count += 1
 
         if count <= 1:
@@ -616,11 +632,12 @@ class Gym:
             return []
 
         for room_name in self._schedule[time_point]:
-            if self._is_instructor_name_unique(self._schedule[time_point][room_name][0]):
+            temp = self._schedule[time_point][room_name][0]
+            if self._is_instructor_name_unique(temp):
                 ins_name = self._schedule[time_point][room_name][0].name
             else:
                 ins_name = self._schedule[time_point][room_name][0].name + \
-                           f" ({self._schedule[time_point][room_name][0].get_id()})"
+                    f" ({self._schedule[time_point][room_name][0].get_id()})"
 
             listy.append(
                 create_offering_dict(
@@ -629,7 +646,8 @@ class Gym:
                     self._schedule[time_point][room_name][1].name,
                     room_name,
                     len(self._schedule[time_point][room_name][2]),
-                    self._room_capacities[room_name] - len(self._schedule[time_point][room_name][2]),
+                    self._room_capacities[room_name]
+                    - len(self._schedule[time_point][room_name][2]),
                     ins_name
                 )
             )
@@ -695,18 +713,17 @@ class Gym:
         """
         listy = []
 
-        if self._schedule:
-            if week is not None:
-
-                for time in self._schedule:
-                    if in_week(time):
-                        listy.append(self.offerings_at(time))
+        if self._schedule and week is not None:
+            for time in self._schedule:
+                if in_week(time):
+                    listy.append(self.offerings_at(time))
 
             else:
                 for time in self._schedule:
                     listy.append(self.offerings_at(time))
 
-        listy.sort(key=lambda x: (datetime.strptime(x['Date'][-10], '%Y-%m-%d'), datetime.strptime(x['Time'], '%H:%M')))
+        listy.sort(key=lambda x: (datetime.strptime(x['Date'][-10], "%Y-%m-%d"),
+                                  datetime.strptime(x['Time'], "%H:%M")))
         return listy
 
     def __eq__(self, other: Gym) -> bool:
@@ -720,10 +737,10 @@ class Gym:
         >>> ac == ac2
         True
         """
-        return self.name == other.name\
-            and self._instructors == other._instructors\
-            and self._workouts == other._workouts\
-            and self._room_capacities == other._room_capacities\
+        return self.name == other.name \
+            and self._instructors == other._instructors \
+            and self._workouts == other._workouts \
+            and self._room_capacities == other._room_capacities \
             and self._schedule == other._schedule
 
     def to_webpage(self, filename: str = 'schedule.html') -> None:
@@ -839,8 +856,8 @@ def html_and_payroll_demo() -> None:
 
 
 if __name__ == '__main__':
-
     import python_ta
+
     python_ta.check_all(config={
         'allowed-io': ['gym_from_yaml', 'html_and_payroll_demo'],
         'allowed-import-modules': ['doctest', 'python_ta', 'typing',
@@ -853,6 +870,7 @@ if __name__ == '__main__':
         'output-format': 'python_ta.reporters.ColorReporter'
     })
     import doctest
+
     doctest.testmod()
 
-    # html_and_payroll_demo()
+    html_and_payroll_demo()

@@ -28,7 +28,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-import pandas as pd
 import yaml
 
 
@@ -86,35 +85,6 @@ def create_offering_dict(date: str,
         'Available': num_available_seats,
         'Instructor': instructor_name
     }
-
-
-def write_schedule_to_html(df: pd.DataFrame, filename: str) -> None:
-    """Use the data in <df> to produce an HTML file called <filename>.
-
-    You do not have to use or understand this function. It is used by a method
-    that we have provided.
-    """
-    pd.set_option('colheader_justify', 'center')  # FOR TABLE <th>
-    header_style = '"text-align:center;font-family:sans-serif;"'
-    h_link = '<link rel="stylesheet" ' \
-             'type="text/css" href="table_style.css"/>'
-    html_string = f'''
-                <html>
-                  <head><title>Schedule</title></head>
-
-                  {h_link}
-                  <body>
-                    <p>
-                    <h1 style={header_style}>Workout Class Schedule</h1>
-                    </p>
-                    TABLE
-                  </body>
-                </html>.
-                '''
-    # Write an HTML file
-    with open(filename, 'w') as f:
-        f.write(html_string.replace("TABLE", df.to_html(classes='mystyle',
-                                                        index=False)))
 
 
 class NoAliasDumper(yaml.Dumper):

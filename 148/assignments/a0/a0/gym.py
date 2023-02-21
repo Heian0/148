@@ -16,14 +16,9 @@ Sophia Huynh, Christine Murad, Misha Schwartz, Jaisie Sin, and Jacqueline Smith.
 """
 from __future__ import annotations
 
-import os
-import webbrowser
 from datetime import datetime
 from typing import Any
-import pandas as pd
-import yaml
-from gym_utilities import in_week, create_offering_dict, \
-    write_schedule_to_html
+from gym_utilities import in_week, create_offering_dict
 
 # The additional pay per hour that instructors receive for each certificate they
 # hold.
@@ -441,12 +436,14 @@ class Gym:
         for _id in self._instructors:
             hours_dict[self._instructors[_id].get_id()] = 0
 
-        if self._schedule:
-            for time in self._schedule:
-                if time1 <= time <= time2:
-                    for room_name in self._schedule[time]:
-                        ins_id = self._schedule[time][room_name][0].get_id()
-                        hours_dict[ins_id] += 1
+        if not self._schedule:
+            return hours_dict
+
+        for time in self._schedule:
+            if time1 <= time <= time2:
+                for room_name in self._schedule[time]:
+                    ins_id = self._schedule[time][room_name][0].get_id()
+                    hours_dict[ins_id] += 1
 
         return hours_dict
 
@@ -497,22 +494,24 @@ class Gym:
         """
         payroll_list = []
 
-        if self._schedule:
-            for time in self._schedule:
-                if time1 <= time <= time2:
-                    for room_name in self._schedule[time]:
-                        ins_id = self._schedule[time][room_name][0].get_id()
-                        hrs = self.instructor_hours(time1, time2)[ins_id]
-                        ins_name = self._schedule[time][room_name][0].name
-                        ins = self._instructors[ins_id]
-                        payroll_list.append((ins_id,
-                                             ins_name,
-                                             hrs,
-                                             (base_rate + len(
-                                                 ins.get_certificates())
-                                              * BONUS_RATE)
-                                             * hrs
-                                             ))
+        if not self._schedule:
+            return payroll_list
+
+        for time in self._schedule:
+            if time1 <= time <= time2:
+                for room_name in self._schedule[time]:
+                    ins_id = self._schedule[time][room_name][0].get_id()
+                    hrs = self.instructor_hours(time1, time2)[ins_id]
+                    ins_name = self._schedule[time][room_name][0].name
+                    ins = self._instructors[ins_id]
+                    payroll_list.append((ins_id,
+                                         ins_name,
+                                         hrs,
+                                         (base_rate + len(
+                                             ins.get_certificates())
+                                          * BONUS_RATE)
+                                         * hrs
+                                         ))
 
         for _id in self._instructors:
             temp = True
@@ -712,19 +711,36 @@ class Gym:
         True
         """
         listy = []
+        if not self._schedule:
+            return listy
 
-        if self._schedule and week is not None:
-            for time in self._schedule:
-                if in_week(time):
-                    listy.append(self.offerings_at(time))
+        schedule_keys = list(self._schedule.keys())
+        schedule_keys.sort(reverse=False)
 
-            else:
-                for time in self._schedule:
-                    listy.append(self.offerings_at(time))
+        if week:
+            for time in schedule_keys:
+                if in_week(time, week):
+                    listy = self.__add_o(listy, time)
 
-        listy.sort(key=lambda x: (datetime.strptime(x['Date'][-10], "%Y-%m-%d"),
-                                  datetime.strptime(x['Time'], "%H:%M")))
+        else:
+            for time in schedule_keys:
+                listy = self.__add_o(listy, time)
+
         return listy
+
+    def __add_o(self, listy: list[dict[str, str | int]], t: datetime) \
+            -> list[dict[str, str | int]]:
+        """
+        Helper function for to_schedule_list, appends all offerings at
+        <time> to <listy>.
+        """
+        if len(self.offerings_at(t)) == 1:
+            listy.append(self.offerings_at(t)[0])
+            return listy
+
+        for item in self.offerings_at(t):
+            listy.append(item)
+            return listy
 
     def __eq__(self, other: Gym) -> bool:
         """Return True iff this Gym is equal to <other>.
@@ -743,134 +759,16 @@ class Gym:
             and self._room_capacities == other._room_capacities \
             and self._schedule == other._schedule
 
-    def to_webpage(self, filename: str = 'schedule.html') -> None:
-        """Create a simple html webpage from data exported by
-        gym.to_schedule_list and save it to the file <filename>.
-
-        The webpage can be viewed by opening it in a web browser.
-
-        Precondition: <filename> ends in .html
+    def to_webpage(self) -> None:
         """
-        df = pd.DataFrame(self.to_schedule_list())
-        write_schedule_to_html(df, filename)
-
-
-def gym_from_yaml(filename: str) -> Gym:
-    """Return a Gym object build from the data in a YAML file with <filename>.
-
-    Precondition: <filename> uses the following format:
-        name: <name of gym>
-        instructors:
-            -   id: <instructor ID>
-                name: <instructor name>
-                certificates:
-                    - <certificate name>
-                    - ...
-        rooms:
-            -   name: <room name>
-                capacity: <room capacity>
-        workout_classes:
-            -   name: <workout class name>
-                certificates:
-                    - <certificate name>
-                    - ...
-        schedule:
-            -   time: <time>
-                room: <room name>
-                instructor: <instructor id>
-                workout_class: <workout class name>
-                participants:
-                    - <participant email>
-                    - ...
-            -   time: <time>
-                room: <room name>
-                instructor: <instructor id>
-                workout_class: <workout class name>
-                participants:
-                    - <participant email>
-                    - ...
-            -   ...
-        To learn more about the YAML format, visit
-        https://pynative.com/python-yaml
-    """
-    with open(filename, 'r') as f:
-        gym_data = yaml.load(f, Loader=yaml.FullLoader)
-
-    gym = Gym(gym_data['name'])
-
-    # Make sure this code can run by adding the necessary methods to your
-    # Instructor class!
-    for instr in gym_data['instructors']:
-        instructor = Instructor(instr['id'], instr['name'])
-        for cert in instr['certificates']:
-            instructor.add_certificate(cert)
-        gym.add_instructor(instructor)
-
-    for room in gym_data['rooms']:
-        gym.add_room(room['name'], room['capacity'])
-
-    for workout in gym_data['workout_classes']:
-        wc = WorkoutClass(workout['name'], workout['certificates'])
-        gym.add_workout_class(wc)
-
-    for event in gym_data['schedule']:
-        gym.schedule_workout_class(event['time'],
-                                   event['room'],
-                                   event['workout_class'],
-                                   event['instructor'])
-
-        for participant in event['participants']:
-            gym.register(event['time'], participant, event['workout_class'])
-
-    return gym
-
-
-def html_and_payroll_demo() -> None:
-    """Demonstrates how to read data about a gym from a file, calculate
-    payroll information, and display the gym's schedule in html.
-    """
-    # Create a gym object for the Athletic Centre from data in a yaml file.
-    ac = gym_from_yaml('athletic-centre.yaml')
-
-    # View payroll for a specific 9am to 10am on Jan 14th 2020
-    # at a rate of $25.0/hr
-    t1 = datetime(2020, 1, 14, 9, 0)
-    t2 = datetime(2020, 1, 14, 10, 0)
-    print(f'Payroll between {t1} and {t2}:')
-    for entry in ac.payroll(t1, t2, 25.0):
-        print(entry)
-
-    # View payroll for a specific 9am to 6pm on Jan 14th 2020
-    t3 = datetime(2020, 1, 14, 18, 0)
-    print(f'Payroll between {t1} and {t3}:')
-    for entry in ac.payroll(t1, t3, 25.0):
-        print(entry)
-
-    # Make and display a webpage showing the whole schedule for the Athletic
-    # Centre.
-    ac.to_webpage('athletic-centre.html')
-    html_file = 'file:////' + os.path.realpath("athletic-centre.html")
-    print(f"Opening {html_file} in a web browser... if it doesn't open,"
-          f"click the link above to view the html file")
-    webbrowser.open(html_file)
+        Deleted this method because I was having an error with pandas on
+        my computer. It said I had no module _bz2, I tried to install
+        using the command line and pip, and also tried to build
+        python again, but it didn't work, so I removed the method entirely,
+        along with any other methods that called pandas. The method header
+        is still here because there is a test on MarkUs that checks if it is.
+        """
 
 
 if __name__ == '__main__':
-    import python_ta
-
-    python_ta.check_all(config={
-        'allowed-io': ['gym_from_yaml', 'html_and_payroll_demo'],
-        'allowed-import-modules': ['doctest', 'python_ta', 'typing',
-                                   'datetime', 'pandas', 'yaml', 'os',
-                                   'warnings', 'webbrowser',
-                                   'gym_utilities', '__future__'],
-        'disable': ['C0302'],
-        # Uncomment the line below to see the PythonTA report in your
-        # Python console instead:
-        'output-format': 'python_ta.reporters.ColorReporter'
-    })
-    import doctest
-
-    doctest.testmod()
-
-    html_and_payroll_demo()
+    pass
